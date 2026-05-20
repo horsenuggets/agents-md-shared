@@ -209,8 +209,10 @@ After opening a PR, continuously poll its status until it is fully merged:
 1. Poll CI check results every 30-60 seconds until all checks complete
 2. If checks fail, read the CI logs, investigate the failure, fix the issue, and push updates
 3. Keep iterating — fix, push, poll, repeat — until all checks pass
-4. Wait for GitHub Copilot's review before merging (manually request a review from Copilot if
-   needed)
+4. Wait for GitHub Copilot's review before merging. If you need to manually re-request a
+   review (e.g. after pushing a fix), just comment `@copilot` in the PR:
+   `gh pr comment <PR> --body "@copilot"`. GitHub's @ autocomplete will not suggest the
+   handle, type it manually.
 5. Once all checks pass and Copilot has reviewed, merge immediately
 6. After merging, verify the PR state is MERGED before moving on
 7. Do not end the conversation or move to the next task while a PR is still open
