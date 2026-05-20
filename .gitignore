@@ -3,5 +3,8 @@
 .local
 .vscode
 
+# Claude Code session artifacts
+/claude-sessions
+
 # Project
 /TODO.md
