@@ -171,7 +171,7 @@ gh api graphql -f o=<owner> -f r=<repo> -F n=<PR> -f query='
         headRefOid
         reviewRequests(first: 10) { nodes { requestedReviewer { ... on Bot { login } } } }
         reviews(last: 30) { nodes { author { login } commit { oid } } }
-        reviewThreads(first: 100) { nodes { isResolved } }
+        reviewThreads(first: 100) { pageInfo { hasNextPage } nodes { isResolved } }
       }
     }
   }' -q '.data.repository.pullRequest | {
@@ -180,7 +180,8 @@ gh api graphql -f o=<owner> -f r=<repo> -F n=<PR> -f query='
       | index("copilot-pull-request-reviewer") != null),
     reviewed: ([.reviews.nodes[] | select(.author.login == "copilot-pull-request-reviewer")]
       | last | .commit.oid),
-    unresolved: ([.reviewThreads.nodes[] | select(.isResolved | not)] | length)
+    unresolved: (if .reviewThreads.pageInfo.hasNextPage then "100+"
+      else ([.reviewThreads.nodes[] | select(.isResolved | not)] | length) end)
   }'
 ```
 
