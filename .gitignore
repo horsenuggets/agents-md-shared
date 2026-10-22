@@ -1,10 +1,12 @@
-# Editor and environment
+# Editor & environment
 .DS_Store
-.local
-.vscode
+.local/
+.vscode/
 
-# Claude Code session artifacts
-/claude-sessions
+# Worktrees
+/.worktrees/
+/.wt/
 
 # Project
+/CONTEXT.md
 /TODO.md
