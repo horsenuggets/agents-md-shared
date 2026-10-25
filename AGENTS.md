@@ -157,6 +157,13 @@ Copilot reviews a PR when it's opened and again after every push that changes co
 review request appears within seconds of the push, and the review itself usually lands
 within a few minutes. Pushes with no diff (e.g., empty commits) are skipped.
 
+**Review Effort**
+
+Every Copilot review runs at the Lite effort level, which costs several times fewer AI
+credits than Balanced. The level comes from the repo's Copilot code review settings, so
+the requests below don't set it. **Never** ask for a Balanced review, whether in the
+GitHub UI or through an API parameter.
+
 **Checking Review Status**
 
 Before requesting anything manually, check where the review stands. This command shows the
