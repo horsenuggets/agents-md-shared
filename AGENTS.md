@@ -147,9 +147,9 @@ After opening a PR, continuously poll its status until it is fully merged...
 
 #### Copilot Reviews
 
-Every PR must be reviewed by GitHub Copilot before merging. Repos are configured to
-request the review automatically, so in most cases you don't need to do anything to
-trigger one.
+Every PR must be approved by GitHub Copilot before merging. Repos are configured to
+request the review automatically, and branch protection requires one approving review,
+which only Copilot gives. In most cases you don't need to do anything to trigger one.
 
 **Automatic Reviews**
 
@@ -178,7 +178,7 @@ gh api graphql -f o=<owner> -f r=<repo> -F n=<PR> -f query='
       pullRequest(number: $n) {
         headRefOid
         reviewRequests(first: 10) { nodes { requestedReviewer { ... on Bot { login } } } }
-        reviews(last: 30) { nodes { author { login } commit { oid } } }
+        reviews(last: 30) { nodes { author { login } commit { oid } state } }
         reviewThreads(first: 100) { pageInfo { hasNextPage } nodes { isResolved } }
       }
     }
@@ -188,6 +188,8 @@ gh api graphql -f o=<owner> -f r=<repo> -F n=<PR> -f query='
       | index("copilot-pull-request-reviewer") != null),
     reviewed: ([.reviews.nodes[] | select(.author.login == "copilot-pull-request-reviewer")]
       | last | .commit.oid),
+    state: ([.reviews.nodes[] | select(.author.login == "copilot-pull-request-reviewer")]
+      | last | .state),
     unresolved: (if .reviewThreads.pageInfo.hasNextPage then "100+"
       else ([.reviewThreads.nodes[] | select(.isResolved | not)] | length) end)
   }'
@@ -196,17 +198,18 @@ gh api graphql -f o=<owner> -f r=<repo> -F n=<PR> -f query='
 Here's how to read the result...
 
 - **Pending** → `pending` is `true`. A review is already queued or in progress, so wait.
-- **Clean** → `reviewed` equals `head` and `unresolved` is `0`. The PR is ready to merge
-  once CI passes.
-- **Has comments** → `reviewed` equals `head`, but `unresolved` is above `0`. Address the
-  comments (see below), and push any fixes, which triggers a new review.
+- **Approved** → `reviewed` equals `head`, `state` is `APPROVED`, and `unresolved` is `0`.
+  The PR is ready to merge once CI passes.
+- **Has comments** → `reviewed` equals `head`, but `state` is `COMMENTED` or `unresolved`
+  is above `0`. Address the comments (see below), and push any fixes, which triggers a new
+  review. If Copilot left no comments and still didn't approve, the repo's approval
+  setting may be off, so tell the user.
 - **Outdated** → `reviewed` doesn't equal `head` and `pending` is `false`. The automatic
   review didn't fire, so get one as described below.
 
-Don't rely on `reviewDecision` or the review text to judge whether a review is clean.
-Copilot's reviews always land as `COMMENTED`, never `APPROVED`, and the summary format
-changes often (older guidance looked for "generated no new comments", which no longer
-appears).
+Don't rely on the review text to judge whether a review is clean, since its summary format
+changes often (e.g., "Approval recommended" appears even on reviews that don't approve).
+Only the `APPROVED` state on the head commit counts.
 
 **Getting a Missing Review**
 
@@ -224,9 +227,10 @@ instead of retrying.
 **Unreviewable PRs**
 
 If Copilot's review says it "wasn't able to review any files", the PR only touches files
-Copilot skips (e.g., `.gitignore`). That counts as a clean review, so merge once CI
-passes. A review saying Copilot "encountered an error" is different, so tell the user and
-ask them to request it again from the PR page at Lite.
+Copilot skips (e.g., `.gitignore`). Copilot won't approve it, so the PR stays blocked.
+Tell the user, who can step in and merge it. A review saying Copilot "encountered an
+error" is different, so tell the user and ask them to request it again from the PR page at
+Lite.
 
 **Never Comment `@copilot`**
 
