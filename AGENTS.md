@@ -160,9 +160,10 @@ within a few minutes. Pushes with no diff (e.g., empty commits) are skipped.
 **Review Effort**
 
 Every Copilot review runs at the Lite effort level, which costs several times fewer AI
-credits than Balanced. The level comes from the repo's Copilot code review settings, so
-the requests below don't set it. **Never** ask for a Balanced review, whether in the
-GitHub UI or through an API parameter.
+credits than Balanced. Automatic reviews follow the effort level in the repo's Copilot
+code review settings, but reviews requested through the REST or GraphQL API ignore that
+setting and always run at Balanced. The API has no working effort parameter yet, so
+**never** request a Copilot review through the API.
 
 **Checking Review Status**
 
@@ -200,43 +201,32 @@ Here's how to read the result...
 - **Has comments** → `reviewed` equals `head`, but `unresolved` is above `0`. Address the
   comments (see below), and push any fixes, which triggers a new review.
 - **Outdated** → `reviewed` doesn't equal `head` and `pending` is `false`. The automatic
-  review didn't fire, so request one manually.
+  review didn't fire, so get one as described below.
 
 Don't rely on `reviewDecision` or the review text to judge whether a review is clean.
 Copilot's reviews always land as `COMMENTED`, never `APPROVED`, and the summary format
 changes often (older guidance looked for "generated no new comments", which no longer
 appears).
 
-**Requesting a Review Manually**
+**Getting a Missing Review**
 
-Only do this when the review is outdated and nothing is pending. Re-requesting while a
-review is already in progress does nothing. Use the REST API first...
+Only do this when the review is outdated and nothing is pending. Since API requests run at
+Balanced (see Review Effort above), don't request one through the API. Instead, ask the
+user to request it from the PR page with Lite selected in Copilot's effort picker. Closing
+and reopening the PR doesn't trigger a review either. If no review arrives after that, the
+repo may not have Copilot reviews set up at all, so tell the user rather than retrying in
+a loop.
 
-```sh
-gh api -X POST repos/<owner>/<repo>/pulls/<PR>/requested_reviewers -f 'reviewers[]=Copilot'
-```
-
-If that doesn't produce a pending request, fall back to GraphQL with Copilot's bot ID...
-
-```sh
-PR_ID=$(gh pr view <PR> --json id -q .id)
-gh api graphql -f id="$PR_ID" -f query='
-  mutation($id: ID!) {
-    requestReviews(input: {pullRequestId: $id, botIds: ["BOT_kgDOCnlnWA"], union: true}) {
-      pullRequest { number }
-    }
-  }'
-```
-
-If neither method gets a review, the repo may not have Copilot reviews set up at all. Tell
-the user rather than retrying in a loop.
+If Copilot's review says "the job was not started because a GitHub Actions budget is
+preventing further Actions use", the account is out of Actions minutes. Tell the user
+instead of retrying.
 
 **Unreviewable PRs**
 
 If Copilot's review says it "wasn't able to review any files", the PR only touches files
 Copilot skips (e.g., `.gitignore`). That counts as a clean review, so merge once CI
-passes. A review saying Copilot "encountered an error" is different. Request once more,
-and if it fails again, tell the user.
+passes. A review saying Copilot "encountered an error" is different, so tell the user and
+ask them to request it again from the PR page at Lite.
 
 **Never Comment `@copilot`**
 
