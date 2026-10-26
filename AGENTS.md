@@ -137,9 +137,9 @@ After opening a PR, continuously poll its status until it is fully merged...
 2. If checks fail, read the CI logs, investigate the failure, fix the issue, and push
    updates.
 3. Keep iterating (fix, push, poll, repeat) until all checks pass.
-4. Wait for a clean [Copilot review](#copilot-reviews) of the latest commit before
-   merging.
-5. Once all checks pass and Copilot's review is clean, merge immediately.
+4. Wait for the PR's single [Copilot review](#copilot-reviews), then address its comments.
+5. Once all checks pass and the review is addressed, merge immediately. Don't wait for a
+   second review or an approval.
 6. After merging, verify the PR state is `MERGED` before moving on.
 7. Do not end the conversation or move to the next task while a PR is still open.
 8. If a PR is truly blocked by an external issue (e.g., an upstream bug), explicitly tell
@@ -147,49 +147,37 @@ After opening a PR, continuously poll its status until it is fully merged...
 
 #### Copilot Reviews
 
-Every PR must be approved by GitHub Copilot before merging. Repos are configured to
-request the review automatically, and branch protection requires one approving review,
-which only Copilot gives. In most cases you don't need to do anything to trigger one.
+GitHub Copilot reviews every PR once, as feedback rather than as a merge gate. Repos
+request the review automatically, and it runs at the Balanced effort level since there's
+only one. No approval is required, so once the review is addressed and CI passes, merge.
 
-**Automatic Reviews**
+**Automatic Review**
 
-Copilot reviews a PR when it's opened and again after every push that changes code. The
-review request appears within seconds of the push, and the review itself usually lands
-within a few minutes. Pushes with no diff (e.g., empty commits) are skipped.
-
-**Review Effort**
-
-Every Copilot review runs at the Lite effort level, which costs several times fewer AI
-credits than Balanced. Automatic reviews follow the effort level in the repo's Copilot
-code review settings, but reviews requested through the REST or GraphQL API ignore that
-setting and always run at Balanced. The API has no working effort parameter yet, so
-**never** request a Copilot review through the API.
+Copilot reviews a non-draft PR when it's opened, or when a draft is marked ready for
+review. The request appears within seconds, and the review itself usually lands within a
+few minutes. Later pushes don't trigger another review, so don't wait for one after
+pushing fixes.
 
 **Checking Review Status**
 
-Before requesting anything manually, check where the review stands. This command shows the
-head commit, whether a Copilot review is pending, which commit Copilot last reviewed, and
-how many review threads are still unresolved...
+This command shows whether a Copilot review is pending, whether Copilot has reviewed the
+PR, and how many review threads are still unresolved...
 
 ```sh
 gh api graphql -f o=<owner> -f r=<repo> -F n=<PR> -f query='
   query($o: String!, $r: String!, $n: Int!) {
     repository(owner: $o, name: $r) {
       pullRequest(number: $n) {
-        headRefOid
         reviewRequests(first: 10) { nodes { requestedReviewer { ... on Bot { login } } } }
-        reviews(last: 30) { nodes { author { login } commit { oid } state } }
+        reviews(last: 30) { nodes { author { login } } }
         reviewThreads(first: 100) { pageInfo { hasNextPage } nodes { isResolved } }
       }
     }
   }' -q '.data.repository.pullRequest | {
-    head: .headRefOid,
     pending: ([.reviewRequests.nodes[].requestedReviewer.login]
       | index("copilot-pull-request-reviewer") != null),
     reviewed: ([.reviews.nodes[] | select(.author.login == "copilot-pull-request-reviewer")]
-      | last | .commit.oid),
-    state: ([.reviews.nodes[] | select(.author.login == "copilot-pull-request-reviewer")]
-      | last | .state),
+      | length > 0),
     unresolved: (if .reviewThreads.pageInfo.hasNextPage then "100+"
       else ([.reviewThreads.nodes[] | select(.isResolved | not)] | length) end)
   }'
@@ -197,40 +185,32 @@ gh api graphql -f o=<owner> -f r=<repo> -F n=<PR> -f query='
 
 Here's how to read the result...
 
-- **Pending** → `pending` is `true`. A review is already queued or in progress, so wait.
-- **Approved** → `reviewed` equals `head`, `state` is `APPROVED`, and `unresolved` is `0`.
-  The PR is ready to merge once CI passes.
-- **Has comments** → `reviewed` equals `head`, but `state` is `COMMENTED` or `unresolved`
-  is above `0`. Address the comments (see below), and push any fixes, which triggers a new
-  review. If Copilot left no comments and still didn't approve, the repo's approval
-  setting may be off, so tell the user.
-- **Outdated** → `reviewed` doesn't equal `head` and `pending` is `false`. The automatic
-  review didn't fire, so get one as described below.
-
-Don't rely on the review text to judge whether a review is clean, since its summary format
-changes often (e.g., "Approval recommended" appears even on reviews that don't approve).
-Only the `APPROVED` state on the head commit counts.
+- **Pending** → `pending` is `true`. The review is queued or in progress, so wait.
+- **Reviewed** → `reviewed` is `true`. Address the comments (see below), and merge once
+  `unresolved` is `0` and CI passes.
+- **Missing** → Both are `false` a few minutes after the PR was opened. The automatic
+  review didn't fire, so request one as described below.
 
 **Getting a Missing Review**
 
-Only do this when the review is outdated and nothing is pending. Since API requests run at
-Balanced (see Review Effort above), don't request one through the API. Instead, ask the
-user to request it from the PR page with Lite selected in Copilot's effort picker. Closing
-and reopening the PR doesn't trigger a review either. If no review arrives after that, the
-repo may not have Copilot reviews set up at all, so tell the user rather than retrying in
-a loop.
+Only do this when no review has arrived and nothing is pending. Request one through the
+REST API, which runs at Balanced like the automatic review...
 
-If Copilot's review says "the job was not started because a GitHub Actions budget is
-preventing further Actions use", the account is out of Actions minutes. Tell the user
-instead of retrying.
+```sh
+gh api -X POST repos/<owner>/<repo>/pulls/<PR>/requested_reviewers -f 'reviewers[]=Copilot'
+```
+
+If no review arrives after that, the repo may not have Copilot reviews set up at all, so
+tell the user rather than retrying in a loop. If Copilot's review says "the job was not
+started because a GitHub Actions budget is preventing further Actions use", the account is
+out of Actions minutes, so tell the user instead of retrying.
 
 **Unreviewable PRs**
 
 If Copilot's review says it "wasn't able to review any files", the PR only touches files
-Copilot skips (e.g., `.gitignore`). Copilot won't approve it, so the PR stays blocked.
-Tell the user, who can step in and merge it. A review saying Copilot "encountered an
-error" is different, so tell the user and ask them to request it again from the PR page at
-Lite.
+Copilot skips (e.g., `.gitignore`). There's nothing to address, so merge once CI passes. A
+review saying Copilot "encountered an error" is different. Request one more review, and if
+it fails again, tell the user.
 
 **Never Comment `@copilot`**
 
@@ -243,7 +223,8 @@ pushes to your branch, stop and tell the user.
 Read every inline comment and the review body, then reply to each comment individually.
 For valid suggestions, make the fix, push, and reply with the commit SHA. For
 disagreements, reply with a clear technical argument. Resolve every thread (via the
-GraphQL `resolveReviewThread` mutation) so that none are left open at merge time.
+GraphQL `resolveReviewThread` mutation) so that none are left open at merge time, then
+merge without waiting for another review.
 
 ### Post-Work Cleanup
 
