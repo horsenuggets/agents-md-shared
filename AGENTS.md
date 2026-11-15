@@ -65,10 +65,26 @@ jobs:
     name: build-cli-${{ matrix.target }}
 ```
 
+**Workflow Files**
+
+Name each workflow file `<branch>.<kind>.yml`, where kind is `ci` for workflows triggered
+by pull requests and `cd` for workflows triggered by pushes. Its `name:` is
+`<Branch> / <KIND>` in Title Case. Here are the standard ones...
+
+- `main.ci.yml` → `Main / CI`, the checks on PRs to `main`.
+- `main.cd.yml` → `Main / CD`, anything that runs after a push to `main`.
+- `release.ci.yml` → `Release / CI`, the checks on PRs to `release`.
+- `release.cd.yml` → `Release / CD`, publishing after a push to `release`.
+
+A workflow that can't be tied to one branch (e.g., one that runs on PRs to both `main` and
+`release`, or on a schedule) keeps a short kebab-case topic name instead, like
+`test-install.yml` with the name `Test Install`.
+
 ### Branch Naming
 
-All branches must follow the format `<prefix>/<lowercase-kebab-case-name>`. Some example
-prefixes include...
+All branches must follow the format `<prefix>/<lowercase-kebab-case-name>`. Any lowercase
+kebab-case prefix works, and CI enforces the `<prefix>/<name>` shape on PRs to `main`.
+Some common prefixes include...
 
 - `feature` → New features.
 - `bugfix` → Bug fixes.
