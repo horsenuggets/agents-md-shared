@@ -53,6 +53,18 @@ listed as a required status check in branch protection. No non-blocking or optio
 checks. If a check runs, it must pass before merging. The only exceptions are forks of
 existing repositories with existing CI configurations.
 
+Give every job the same kebab-case string as both its id and its `name:`, since the name
+is what required checks match against. Matrix jobs append the matrix value...
+
+```yaml
+jobs:
+  check-formatting:
+    name: check-formatting
+
+  build-cli:
+    name: build-cli-${{ matrix.target }}
+```
+
 ### Branch Naming
 
 All branches must follow the format `<prefix>/<lowercase-kebab-case-name>`. Some example
@@ -279,7 +291,7 @@ The `release` branch should be an exact copy of `main` at release time.
 
 If a merge fails with "required status checks are expected", the branch protection rules
 may have outdated check names. Check names must match the `name:` field in workflow jobs
-(e.g., "Check formatting", not "format").
+exactly (e.g., `check-formatting`).
 
 ### Versioning
 
