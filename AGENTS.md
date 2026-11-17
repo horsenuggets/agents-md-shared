@@ -288,8 +288,9 @@ state. This applies after any workflow that ends with merged changes.
    everything from `release`.
 6. Create a PR from `pre-release` to `release`.
 7. Set the PR title to exactly `Release X.Y.Z`, matching the `VERSION` file.
-8. Limit the PR description to Summary and Changelog sections, with no "Test plan"
-   checkboxes.
+8. Write the PR description as one or two concise plain paragraphs explaining what changed
+   and why, with the relevant version and changelog details in prose. Do not use headings,
+   including "Summary", "Changelog", or "Test plan", or checklist boilerplate.
 9. Make sure the PR passes all checks, including...
    - All standard checks (format, test, static analysis).
    - Version validation (proper semver bump).
