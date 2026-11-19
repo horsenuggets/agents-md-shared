@@ -149,7 +149,7 @@ Once the PR is merged, remove the worktree and its local branch as part of
 
 1. Create a worktree with a new branch from `origin/main` (see [Worktrees](#worktrees)).
 2. Make changes and commit.
-3. Create a PR to `main`. GitHub Copilot reviews it automatically (see
+3. Create a PR to `main`. Address any feedback that arrives (see
    [Copilot Reviews](#copilot-reviews)).
 4. Make sure the PR passes all checks (format, test, static analysis, branch naming).
 5. Squash merge to `main`.
@@ -165,9 +165,10 @@ After opening a PR, continuously poll its status until it is fully merged...
 2. If checks fail, read the CI logs, investigate the failure, fix the issue, and push
    updates.
 3. Keep iterating (fix, push, poll, repeat) until all checks pass.
-4. Wait for the PR's single [Copilot review](#copilot-reviews), then address its comments.
-5. Once all checks pass and the review is addressed, merge immediately. Don't wait for a
-   second review or an approval.
+4. Address any [Copilot review](#copilot-reviews) feedback that arrives. A missing review
+   is not a blocker, and agents must never request one.
+5. Once all checks pass and any received feedback is addressed, merge immediately. Don't
+   wait for a missing review, a follow-up review, or an approval.
 6. After merging, verify the PR state is `MERGED` before moving on.
 7. Do not end the conversation or move to the next task while a PR is still open.
 8. If a PR is truly blocked by an external issue (e.g., an upstream bug), explicitly tell
@@ -175,16 +176,16 @@ After opening a PR, continuously poll its status until it is fully merged...
 
 #### Copilot Reviews
 
-GitHub Copilot reviews every PR once, as feedback rather than as a merge gate. Repos
-request the review automatically, and it runs at the Balanced effort level since there's
-only one. No approval is required, so once the review is addressed and CI passes, merge.
+Treat GitHub Copilot reviews as optional feedback, not a merge gate. The user is
+responsible for configuring automatic reviews in their GitHub settings. Agents must not
+configure review settings, request reviews, or retry failed reviews unless explicitly
+asked to do so.
 
 **Automatic Review**
 
-Copilot reviews a non-draft PR when it's opened, or when a draft is marked ready for
-review. The request appears within seconds, and the review itself usually lands within a
-few minutes. Later pushes don't trigger another review, so don't wait for one after
-pushing fixes.
+If a review arrives, address its feedback before merging. A missing, unavailable, failed,
+or skipped review is not a blocker. Do not wait for one once CI passes and other merge
+requirements are satisfied. Later pushes do not require another review or an approval.
 
 **Checking Review Status**
 
@@ -213,32 +214,18 @@ gh api graphql -f o=<owner> -f r=<repo> -F n=<PR> -f query='
 
 Here's how to read the result...
 
-- **Pending** → `pending` is `true`. The review is queued or in progress, so wait.
+- **Pending** → `pending` is `true`. Check for feedback while CI runs, but do not make
+  completion of the review a separate merge gate.
 - **Reviewed** → `reviewed` is `true`. Address the comments (see below), and merge once
-  `unresolved` is `0` and CI passes.
-- **Missing** → Both are `false` a few minutes after the PR was opened. The automatic
-  review didn't fire, so request one as described below.
+  `unresolved` is `0`, CI passes, and all other merge requirements are satisfied.
+- **Missing** → Both are `false`. Continue without requesting a review or blocking the
+  merge. Review setup belongs to the user.
 
-**Getting a Missing Review**
+**Unavailable Reviews**
 
-Only do this when no review has arrived and nothing is pending. Request one through the
-REST API, which runs at Balanced like the automatic review...
-
-```sh
-gh api -X POST repos/<owner>/<repo>/pulls/<PR>/requested_reviewers -f 'reviewers[]=Copilot'
-```
-
-If no review arrives after that, the repo may not have Copilot reviews set up at all, so
-tell the user rather than retrying in a loop. If Copilot's review says "the job was not
-started because a GitHub Actions budget is preventing further Actions use", the account is
-out of Actions minutes, so tell the user instead of retrying.
-
-**Unreviewable PRs**
-
-If Copilot's review says it "wasn't able to review any files", the PR only touches files
-Copilot skips (e.g., `.gitignore`). There's nothing to address, so merge once CI passes. A
-review saying Copilot "encountered an error" is different. Request one more review, and if
-it fails again, tell the user.
+If Copilot reports an error, a budget limit, or that no files could be reviewed, continue
+without a review. Never request a retry or change review settings to make it run. Actual
+CI failures and branch protection requirements still block merging.
 
 **Never Comment `@copilot`**
 
